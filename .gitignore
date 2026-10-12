@@ -1,0 +1,53 @@
+# =============================================================================
+# Lab Management Server - Git Ignore Configuration
+# =============================================================================
+
+# Build Artifacts & Binaries
+build/
+bin/
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+*.out
+server
+
+# Local Environment Variables & Secrets (CRITICAL: Never commit real secrets)
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+*.cert
+
+# Database files & local dumps
+*.dump
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs & Runtime output
+*.log
+logs/
+
+# IDE & Editor Configurations
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.project
+.cproject
+.settings/
+*.swp
+*.swo
+*~
+
+# Operating System & VirtualBox Files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+*.vbox
+*.vbox-prev
