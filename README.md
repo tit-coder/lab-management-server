@@ -1,200 +1,288 @@
-# 🖥️ Lab Management Server — Website Quản Lý Thiết Bị Phòng Máy
+# Thiết Kế và Xây Dựng Web Server bằng C++ Kết Nối Cơ Sở Dữ Liệu MariaDB trên Ubuntu Linux Để Quản Lý Thiết Bị Phòng Máy
 
-[![Language](https://img.shields.io/badge/Language-C%2B%2B17-blue.svg)](https://en.cppreference.com/w/cpp/17)
-[![Database](https://img.shields.io/badge/Database-MariaDB-orange.svg)](https://mariadb.org/)
-[![Server](https://img.shields.io/badge/Server-cpp--httplib-green.svg)](https://github.com/yhirose/cpp-httplib)
-[![Platform](https://img.shields.io/badge/Platform-Ubuntu%20Linux-red.svg)](https://ubuntu.com/)
-[![License](https://img.shields.io/badge/License-MIT-purple.svg)](LICENSE)
-
-Hệ thống website nội bộ dành cho các trường học và trung tâm công nghệ nhằm quản lý toàn diện phần cứng phòng máy: máy tính (PC), màn hình, chuột, bàn phím và các thiết bị mạng. Dự án được xây dựng với mục tiêu hiệu năng cao bằng **C++**, lưu trữ dữ liệu bền vững trên **MariaDB**, giao diện web **HTML/CSS/JS** trực quan và quy trình cộng tác nhóm chuyên nghiệp trên **GitHub**.
-
----
-
-## 🎯 Chức Năng Chính Của Hệ Thống
-
-1. **Hiển thị danh sách thiết bị:** Trình bày đầy đủ thông tin chi tiết về mã quản lý, model, loại linh kiện, phòng máy và tình trạng.
-2. **Tìm kiếm & Lọc nâng cao:** Tìm kiếm tức thời theo mã thiết bị, tên gọi hoặc lọc nhanh theo từng phòng máy (`LAB101`, `LAB102`,...) và loại thiết bị.
-3. **Quản lý thiết bị (CRUD):** Thêm mới, cập nhật thông tin và xóa thiết bị khỏi hệ thống.
-4. **Quản lý tình trạng hoạt động:** Phân loại rõ ràng 3 trạng thái: `Active` (Hoạt động), `Broken` (Hỏng hóc), `Repairing` (Đang sửa chữa).
-5. **Ghi nhận sự cố & Lịch sử bảo trì:** Tạo phiếu báo hỏng khi phát hiện sự cố; theo dõi quy trình xử lý qua 3 trạng thái: `Pending` (Chờ xử lý), `InProgress` (Đang xử lý), `Completed` (Đã hoàn thành).
-6. **Dashboard thống kê trực quan:** Bảng chỉ số tổng quan (KPI cards) hiển thị tổng số máy, số lượng máy hoạt động, máy lỗi và số phiếu sự cố tồn đọng.
-7. **Lưu trữ dữ liệu bền vững:** Dữ liệu lưu trong CSDL quan hệ MariaDB, đảm bảo toàn vẹn dữ liệu với khóa chính, khóa ngoại và chỉ mục tối ưu.
-8. **RESTful API chuẩn hóa:** Cung cấp 10 endpoint giao tiếp thông qua JSON với mã trạng thái HTTP chuẩn mực (200, 201, 400, 404, 500).
-9. **Dễ dàng triển khai:** Cung cấp sẵn Makefile chuẩn hóa, script kiểm thử tự động và tài liệu hướng dẫn chạy trên môi trường Ubuntu Linux / VirtualBox.
+> **Đồ án cuối kỳ môn học:** Linux và Phần mềm mã nguồn mở  
+> **Nền tảng thực thi:** Ubuntu Linux 24.04 LTS / 26.04 LTS  
+> **Backend:** C++17, GCC/G++, Make, `cpp-httplib`, `libmariadb` (MariaDB Connector/C), `nlohmann/json`  
+> **Cơ sở dữ liệu:** MariaDB Server 10.11+  
+> **Frontend:** HTML5, CSS3, JavaScript thuần (Vanilla JS ES6+) với Fetch API  
+> **Cổng dịch vụ:** 8080 (`http://localhost:8080`)  
 
 ---
 
-## 🏗️ Kiến Trúc Hệ Thống (System Architecture)
+## 1. Giới Thiệu & Mục Tiêu Đồ Án
 
-```mermaid
-flowchart TD
-    Client["Trình duyệt Web (Web Client)<br/>HTML5 / CSS3 / Vanilla JS"] -->|"HTTP Requests (Port 8080)"| WebServer["C++ Web Server<br/>(cpp-httplib Engine)"]
-    
-    subgraph BackendApp ["Ứng dụng C++ Backend"]
-        WebServer --> StaticHandler["Static File Handler<br/>(Phục vụ public/)"]
-        WebServer --> Router["RESTful API Router<br/>(Endpoints /api/*)"]
-        Router --> Controller["Business Logic & Validation"]
-        Controller --> DBLayer["lab::Database Wrapper<br/>(MariaDB Connector/C)"]
-        DBLayer --> PrepStmt["Prepared Statements Engine<br/>(Chống SQL Injection)"]
-    end
-    
-    PrepStmt -->|"TCP Socket (Port 3306)"| MariaDB[("Cơ sở dữ liệu MariaDB<br/>(Database: lab_management)")]
+Đồ án tập trung nghiên cứu, thiết kế và phát triển một hệ thống Web nội bộ hoàn chỉnh phục vụ công tác quản lý trang thiết bị phòng máy tại trường học hoặc trung tâm dữ liệu. 
+
+Hệ thống được phát triển thuần túy dựa trên các công nghệ mã nguồn mở và kỹ thuật lập trình hệ thống trên môi trường Linux:
+- **Backend C++ hiệu năng cao**: Tự xây dựng máy chủ Web Server bằng C++17 đa luồng với thư viện `cpp-httplib`, không sử dụng các framework cấp cao như Node.js, Express, PHP hay Python nhằm nắm vững bản chất tầng mạng (Socket, HTTP Protocol, Multi-threading) và quản lý bộ nhớ trực tiếp.
+- **Tích hợp cơ sở dữ liệu cấp thấp**: Sử dụng trực tiếp **MariaDB Connector/C** (`libmariadb`) để kết nối, quản trị transaction nguyên tử, truy vấn an toàn và chống tấn công SQL Injection thông qua thoát chuỗi và ràng buộc khóa ngoại.
+- **Chính sách bảo toàn dữ liệu kỹ thuật**: Áp dụng cơ chế khóa ngoại `ON DELETE RESTRICT` để bảo toàn lịch sử sự cố và bảo trì của thiết bị; ngăn chặn tuyệt đối việc xóa nhầm thiết bị khi đã có hồ sơ kỹ thuật liên kết.
+- **Giao diện hiện đại, trực quan**: Xây dựng bảng điều khiển (Dashboard) thời gian thực, quản lý thiết bị, tìm kiếm, lọc theo phòng máy và điều phối quy trình xử lý sự cố bảo trì.
+
+---
+
+## 2. Công Nghệ Sử Dụng
+
+| Thành phần | Công nghệ / Thư viện | Vai trò |
+|---|---|---|
+| **Hệ điều hành** | Ubuntu Linux 24.04 LTS / 26.04 LTS | Môi trường triển khai, biên dịch và chạy dịch vụ |
+| **Ngôn ngữ Backend** | C++17 (G++ 13+) | Xử lý logic máy chủ, điều hướng HTTP và nghiệp vụ |
+| **HTTP Web Server** | `cpp-httplib` (0.14+) | Lắng nghe kết nối TCP port 8080, phục vụ file tĩnh và REST API |
+| **Cơ sở dữ liệu** | MariaDB Server 10.11+ | Lưu trữ quan hệ bền vững, toàn vẹn dữ liệu |
+| **Database Driver** | MariaDB Connector/C (`libmariadb-dev`) | Thư viện C kết nối trực tiếp tầng socket tới MariaDB |
+| **Định dạng dữ liệu** | `nlohmann/json` (v3.11.3) | Phân tích cú pháp và tuần tự hóa JSON chuẩn C++ |
+| **Giao diện Web** | HTML5, CSS3, Vanilla JavaScript | Giao diện Responsive, AJAX không tải lại trang qua Fetch API |
+| **Công cụ biên dịch** | GNU Make (Makefile) | Quản lý quy trình build, link và chạy tự động |
+| **Kiểm thử tự động** | Bash Shell Script, cURL | Bộ 23 ca kiểm thử tự động toàn diện REST API |
+| **Quản trị dịch vụ** | systemd service unit | Chạy nền tự động, phục hồi khi lỗi, chạy bằng non-root user |
+
+---
+
+## 3. Cấu Trúc Thư Mục Dự Án
+
+Toàn bộ dự án được tổ chức gọn gàng, chuẩn mực theo mô hình phần mềm mã nguồn mở trên Linux:
+
+```
+/home/hoai-vy-nguyen/lab-device-server/
+├── .env                         # File cấu hình môi trường cục bộ (được Git bỏ qua)
+├── .env.example                 # File cấu hình mẫu an toàn để tham khảo
+├── .gitignore                   # Danh sách file và thư mục không đưa lên Git
+├── Makefile                     # Tự động hóa build, run, clean, test, check-deps
+├── README.md                    # Tài liệu hướng dẫn toàn diện dự án (file này)
+├── server                       # Binary thực thi C++ sau khi biên dịch
+│
+├── config/                      # Cấu hình dịch vụ hệ thống
+│   └── lab-management.service   # File unit mẫu triển khai dịch vụ systemd
+│
+├── docs/                        # Tài liệu kỹ thuật chi tiết
+│   ├── api.md                   # Đặc tả chi tiết toàn bộ các RESTful API
+│   ├── architecture.md          # Sơ đồ kiến trúc 3 tầng, concurrency & state machine
+│   ├── deployment.md            # Hướng dẫn chi tiết cài đặt và triển khai hệ thống
+│   └── test_plan.md             # Kế hoạch và ma trận kết quả kiểm thử thực tế
+│
+├── include/                     # File tiêu đề (Header files C++)
+│   ├── config.h                 # Phân tích file .env và nạp biến môi trường
+│   ├── database.h               # Wrapper MariaDB Connector/C an toàn đa luồng
+│   ├── device.h                 # Cấu trúc Device và nghiệp vụ quản lý thiết bị
+│   ├── maintenance.h            # Cấu trúc MaintenanceLog và nghiệp vụ sự cố/bảo trì
+│   └── nlohmann/                # Thư viện JSON cho C++ (Single Header v3.11.3)
+│       └── json.hpp
+│
+├── public/                      # Tầng giao diện người dùng (Frontend Web)
+│   ├── app.js                   # Logic JavaScript thuần, Fetch API, điều khiển DOM & Modal
+│   ├── index.html               # Trang chủ Dashboard, bảng thiết bị và bảo trì
+│   └── style.css                # Giao diện responsive, màu sắc hiện đại, CSS variables
+│
+├── sql/                         # Kịch bản cơ sở dữ liệu
+│   └── schema.sql               # Tạo database, bảng, ràng buộc và dữ liệu mẫu an toàn
+│
+├── src/                         # Mã nguồn C++ chính
+│   ├── database.cpp             # Cài đặt kết nối, truy vấn, transaction, mutex lock
+│   ├── device.cpp               # Cài đặt CRUD thiết bị, thống kê, kiểm tra trùng lặp
+│   ├── maintenance.cpp          # Cài đặt phiếu bảo trì, đồng bộ trạng thái nguyên tử
+│   └── main.cpp                 # Điểm khởi nhập, routing REST API, CORS, signal handler
+│
+└── tests/                       # Kịch bản kiểm thử
+    └── test_api.sh              # Bộ kiểm thử tự động 23 ca test bằng cURL và shell
 ```
 
 ---
 
-## 📁 Cấu Trúc Thư Mục Dự Án
+## 4. Yêu Cầu Môi Trường & Cài Đặt Gói Phụ Thuộc
 
-```text
-lab-management-server/
-├── .github/
-│   ├── pull_request_template.md    # Mẫu kiểm duyệt Pull Request
-│   └── ISSUE_TEMPLATE/
-│       └── bug_report.md           # Mẫu báo cáo lỗi hệ thống
-├── include/
-│   ├── database.h                  # Khai báo lớp Database, models và prepared statements
-│   └── httplib.h                   # Thư viện HTTP cpp-httplib (single-header)
-├── src/
-│   ├── main.cpp                    # Điểm khởi chạy Web Server, routing REST API và CORS
-│   └── database.cpp                # Hiện thực kết nối MariaDB và các thao tác CRUD
-├── public/
-│   ├── index.html                  # Giao diện Dashboard & quản lý thiết bị
-│   ├── style.css                   # Giao diện hiện đại, responsive, CSS Variables
-│   └── app.js                      # Logic JavaScript phía client, gọi RESTful API
-├── sql/
-│   └── schema.sql                  # Script tạo CSDL, bảng, chỉ mục và dữ liệu mẫu
-├── tests/
-│   ├── README.md                   # Hướng dẫn kiểm thử thủ công và tự động
-│   └── run_api_tests.sh            # Script bash tự động kiểm thử toàn bộ API qua cURL
-├── docs/
-│   ├── API_SPECIFICATION.md        # Đặc tả chi tiết 10 RESTful API endpoints
-│   ├── DATABASE_DESIGN.md          # Thiết kế ERD, cấu trúc bảng và bảo mật CSDL
-│   ├── GITHUB_WORKFLOW.md          # Quy chuẩn làm việc nhóm 4 người trên GitHub
-│   └── TEST_PLAN.md                # Kế hoạch và ma trận kiểm thử hệ thống
-├── .env.example                    # Mẫu cấu hình biến môi trường (không chứa secret)
-├── .gitignore                      # Loại bỏ file build, nhị phân, log và file .env thật
-├── Makefile                        # Tự động hóa build, run, clean, kiểm tra thư viện
-├── README.md                       # Tài liệu tổng quan dự án (file này)
-└── CONTRIBUTING.md                 # Quy tắc đóng góp và phân công vai trò 4 thành viên
-```
-
-> **Giải thích điều chỉnh cấu trúc:**
-> Thư viện single-header `include/httplib.h` và script kiểm thử `tests/run_api_tests.sh` được tích hợp sẵn để thành viên có thể biên dịch và chạy kiểm thử tự động ngay trên mọi bản phân phối Ubuntu mà không gặp lỗi thiếu thư viện ngoài.
-
----
-
-## 💻 Yêu Cầu Môi Trường & Cài Đặt (Ubuntu Linux)
-
-Hệ thống được thiết kế để chạy mượt mà trên **Ubuntu Linux** (20.04, 22.04, 24.04 LTS), có thể sử dụng trực tiếp hoặc qua máy ảo **Ubuntu trên VirtualBox**.
-
-### 1. Cài đặt các gói phụ thuộc (Dependencies)
-Mở terminal trên Ubuntu và chạy lệnh sau:
+Hệ thống yêu cầu các gói phần mềm cơ bản trên Ubuntu Linux. Chạy lệnh sau để cài đặt đầy đủ:
 
 ```bash
 sudo apt update
-sudo apt install -y build-essential libmariadb-dev libmariadb3 mariadb-server curl git
+sudo apt install -y build-essential g++ make git curl \
+    mariadb-server libmariadb-dev libcpp-httplib-dev
 ```
 
-### 2. Thiết lập Cơ sở dữ liệu MariaDB
-Khởi động dịch vụ MariaDB (nếu chưa chạy):
-```bash
-sudo systemctl enable --now mariadb
-```
-
-Nhập cấu trúc bảng và dữ liệu mẫu kiểm thử:
-```bash
-sudo mariadb < sql/schema.sql
-```
-
-Tạo tài khoản ứng dụng an toàn (không dùng `root`):
-```sql
-sudo mariadb -e "CREATE USER IF NOT EXISTS 'lab_user'@'localhost' IDENTIFIED BY 'lab_password_change_me';"
-sudo mariadb -e "CREATE USER IF NOT EXISTS 'lab_user'@'127.0.0.1' IDENTIFIED BY 'lab_password_change_me';"
-sudo mariadb -e "GRANT SELECT, INSERT, UPDATE, DELETE ON lab_management.* TO 'lab_user'@'localhost';"
-sudo mariadb -e "GRANT SELECT, INSERT, UPDATE, DELETE ON lab_management.* TO 'lab_user'@'127.0.0.1';"
-sudo mariadb -e "FLUSH PRIVILEGES;"
-```
-
-### 3. Cấu hình Biến môi trường
-Sao chép file cấu hình mẫu sang `.env`:
-```bash
-cp .env.example .env
-```
-*(Nếu bạn đổi mật khẩu user CSDL, hãy cập nhật tương ứng trong file `.env`)*.
-
----
-
-## 🔨 Biên Dịch & Chạy Ứng Dụng
-
-### 1. Kiểm tra môi trường biên dịch
+Kiểm tra trạng thái các công cụ và thư viện bằng lệnh:
 ```bash
 make check-deps
 ```
 
-### 2. Biên dịch mã nguồn
-```bash
-make
-```
-File thực thi sẽ được tạo tại `bin/server`.
+---
 
-### 3. Khởi chạy Web Server
+## 5. Cấu Hình Cơ Sở Dữ Liệu MariaDB
+
+### 5.1. Khởi tạo Database và Phân quyền người dùng riêng biệt
+Ứng dụng sử dụng tài khoản chuyên dụng `labapp` được phân quyền tối thiểu (`SELECT, INSERT, UPDATE, DELETE`), không sử dụng tài khoản `root`.
+
+Đăng nhập vào MariaDB:
+```bash
+sudo mariadb
+```
+
+Thực thi khối lệnh SQL sau:
+```sql
+CREATE DATABASE IF NOT EXISTS lab_management
+    CHARACTER SET utf8mb4
+    COLLATE utf8mb4_unicode_ci;
+
+CREATE USER IF NOT EXISTS 'labapp'@'localhost' IDENTIFIED BY 'LabApp@2026Secure';
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON lab_management.* TO 'labapp'@'localhost';
+
+FLUSH PRIVILEGES;
+EXIT;
+```
+
+### 5.2. Chạy file khởi tạo cấu trúc và dữ liệu mẫu
+File `sql/schema.sql` sử dụng cú pháp `CREATE TABLE IF NOT EXISTS` và `INSERT IGNORE`, đảm bảo an toàn tuyệt đối, có thể chạy lại bất cứ lúc nào mà không phá hủy hay làm trùng lặp dữ liệu hiện có:
+
+```bash
+cd /home/hoai-vy-nguyen/lab-device-server
+mariadb -h localhost -u labapp -p'LabApp@2026Secure' lab_management < sql/schema.sql
+```
+
+Kiểm tra dữ liệu đã nạp thành công:
+```bash
+mariadb -h localhost -u labapp -p'LabApp@2026Secure' lab_management -e "SELECT * FROM devices; SELECT * FROM maintenance_logs;"
+```
+
+---
+
+## 6. Cấu Hình Biến Môi Trường (.env)
+
+Hệ thống tự động đọc cấu hình kết nối từ file `.env` tại thư mục gốc.
+
+Tạo hoặc kiểm tra file `.env`:
+```ini
+DB_HOST=localhost
+DB_PORT=3306
+DB_NAME=lab_management
+DB_USER=labapp
+DB_PASSWORD=LabApp@2026Secure
+
+SERVER_HOST=0.0.0.0
+SERVER_PORT=8080
+```
+> **Bảo mật:** File `.env` chứa mật khẩu thật đã được liệt kê trong `.gitignore` và không bao giờ được commit lên GitHub.
+
+---
+
+## 7. Biên Dịch và Vận Hành Hệ Thống
+
+Makefile được cung cấp đầy đủ các target tiêu chuẩn:
+
+| Lệnh | Ý nghĩa |
+|---|---|
+| `make` hoặc `make build` | Biên dịch toàn bộ mã nguồn C++ thành file nhị phân `./server` |
+| `make run` | Biên dịch và khởi chạy trực tiếp Web Server tại cổng 8080 |
+| `make test` | Thực thi toàn bộ bộ kiểm thử tự động 23 ca test |
+| `make clean` | Xóa binary thực thi và các file object `.o` |
+| `make check-deps` | Kiểm tra sự hiện diện của các thư viện và công cụ trên máy |
+| `make help` | Hiển thị bảng trợ giúp hướng dẫn các lệnh |
+
+### 7.1. Biên dịch dự án:
+```bash
+make clean
+make build
+```
+
+### 7.2. Khởi chạy máy chủ:
 ```bash
 make run
 ```
-Sau khi khởi chạy thành công, mở trình duyệt trên Ubuntu (hoặc từ máy host nếu cấu hình mạng VirtualBox ở chế độ Bridged/Port Forwarding):
-👉 Truy cập: **[http://localhost:8080](http://localhost:8080)**
+Màn hình terminal sẽ xuất hiện thông báo:
+```
+========================================================
+  HE THONG QUAN LY THIET BI PHONG MAY - LINUX & OPEN SOURCE
+  C++ Web Server + MariaDB Connector/C
+========================================================
+[CONFIG] DB Host: localhost:3306
+[CONFIG] DB Name: lab_management
+[CONFIG] DB User: labapp
+[CONFIG] Server:  http://0.0.0.0:8080
+[SUCCESS] Ket noi MariaDB thanh cong!
+[INFO] Server dang lang nghe tren port 8080...
+[INFO] Truy cap giao dien website tai: http://localhost:8080
+```
+
+### 7.3. Truy cập giao diện Website:
+Mở trình duyệt Web bất kỳ (Chrome, Firefox, Edge) và truy cập:
+👉 **`http://localhost:8080`**
 
 ---
 
-## 🧪 Kiểm Thử Hệ Thống (Testing)
+## 8. Danh Sách RESTful API Hoàn Chỉnh
 
-Trong một cửa sổ terminal khác trên Ubuntu:
+| Phương thức | Đường dẫn (Endpoint) | Chức năng nghiệp vụ | Mã HTTP thành công | Mã HTTP lỗi |
+|---|---|---|---|---|
+| `GET` | `/` | Trả về giao diện website người dùng (HTML/CSS/JS) | `200 OK` | `404 Not Found` |
+| `GET` | `/api/health` | Kiểm tra trạng thái máy chủ C++ và kết nối cơ sở dữ liệu MariaDB | `200 OK` | `503 Service Unavailable` |
+| `GET` | `/api/stats` | Thống kê tổng số thiết bị, số lượng Active, Broken, Repairing | `200 OK` | `500 Internal Error` |
+| `GET` | `/api/devices` | Lấy danh sách thiết bị (hỗ trợ lọc theo `room`, `status`, `search`) | `200 OK` | `500 Internal Error` |
+| `GET` | `/api/devices/:id` | Xem thông tin chi tiết một thiết bị theo ID | `200 OK` | `404 Not Found` |
+| `POST` | `/api/devices` | Thêm thiết bị mới (xác thực trường bắt buộc, kiểm tra trùng mã) | `201 Created` | `400 Bad Request`, `409 Conflict` |
+| `PUT` | `/api/devices/:id` | Cập nhật thông tin thiết bị (tên, loại, phòng, trạng thái) | `200 OK` | `400 Bad Request`, `404`, `409` |
+| `DELETE` | `/api/devices/:id` | Xóa thiết bị (áp dụng chính sách bảo toàn: chặn xóa nếu có phiếu bảo trì) | `200 OK` | `404 Not Found`, `409 Conflict` |
+| `GET` | `/api/maintenance` | Lấy danh sách phiếu bảo trì (kèm mã, tên thiết bị, phòng máy) | `200 OK` | `500 Internal Error` |
+| `POST` | `/api/maintenance` | Ghi nhận sự cố / tạo phiếu (tự động cập nhật thiết bị thành Broken/Repairing) | `201 Created` | `400 Bad Request`, `404 Not Found` |
+| `PUT` | `/api/maintenance/:id` | Cập nhật tiến độ phiếu (khi Completed, tự chuyển thiết bị về Active) | `200 OK` | `400 Bad Request`, `404 Not Found` |
+
+> *Xem chi tiết payload request và response mẫu tại:* [docs/api.md](file:///home/hoai-vy-nguyen/lab-device-server/docs/api.md).
+
+---
+
+## 9. Kiểm Thử Tự Động (Automated Testing)
+
+Dự án tích hợp bộ kiểm thử tự động tại `tests/test_api.sh` bao gồm **23 ca kiểm thử thực tế**:
+- Sức khỏe hệ thống và phản ứng khi MariaDB mất kết nối (`status: 503`).
+- Kiểm tra tính toàn vẹn dữ liệu qua các lần khởi động lại máy chủ (Server Restart Persistence).
+- Xác thực đầu vào: JSON sai định dạng, thiếu trường bắt buộc, ID tồn tại và không tồn tại.
+- Kiểm tra xung đột dữ liệu: Thêm thiết bị trùng mã (`409 Conflict`).
+- Đồng bộ trạng thái thiết bị và phiếu bảo trì theo Transaction nguyên tử.
+- Thực thi chính sách bảo toàn lịch sử bảo trì (`ON DELETE RESTRICT` - `409 Conflict`).
+
+Chạy kiểm thử:
 ```bash
-# Chạy bộ test suite tự động kiểm thử toàn bộ 10 API
 make test
 ```
-Hoặc chạy trực tiếp script:
-```bash
-./tests/run_api_tests.sh 127.0.0.1 8080
+
+**Kết quả kiểm thử thực tế:**
 ```
-Chi tiết về các kịch bản kiểm thử: xem tại [docs/TEST_PLAN.md](docs/TEST_PLAN.md).
+======================================================================
+ BÁO CÁO TỔNG KẾT KIỂM THỬ (TEST SUMMARY)
+======================================================================
+  - Tổng số test case thực thi: 23
+  - Số test case thành công:   23
+  - Số test case thất bại:     0
+
+✔ TẤT CẢ 23 TEST CASES ĐÃ PASS 100%! HỆ THỐNG HOẠT ĐỘNG HOÀN HẢO!
+```
 
 ---
 
-## 📡 Danh Sách RESTful API
+## 10. Triển Khai Dịch Vụ Hệ Thống (systemd Service)
 
-Tất cả phản hồi đều có định dạng `application/json`. Chi tiết tham số và mã lỗi xem tại [docs/API_SPECIFICATION.md](docs/API_SPECIFICATION.md).
-
-| HTTP Method | Endpoint | Mô tả chức năng | HTTP Status |
-|---|---|---|---|
-| `GET` | `/api/health` | Kiểm tra trạng thái máy chủ & kết nối MariaDB | `200` |
-| `GET` | `/api/stats` | Lấy thống kê tổng hợp thiết bị cho Dashboard | `200` |
-| `GET` | `/api/devices` | Danh sách thiết bị (hỗ trợ query `search`, `room`, `status`) | `200` |
-| `GET` | `/api/devices/:id` | Xem chi tiết 1 thiết bị theo ID | `200`, `404` |
-| `POST` | `/api/devices` | Thêm mới thiết bị vào phòng máy | `201`, `400` |
-| `PUT` | `/api/devices/:id` | Cập nhật thông tin/trạng thái thiết bị | `200`, `400`, `404` |
-| `DELETE` | `/api/devices/:id` | Xóa thiết bị khỏi hệ thống | `200`, `404` |
-| `GET` | `/api/maintenance` | Danh sách phiếu sự cố bảo trì (lọc theo `status`) | `200` |
-| `POST` | `/api/maintenance` | Ghi nhận sự cố hỏng hóc thiết bị | `201`, `400` |
-| `PUT` | `/api/maintenance/:id` | Cập nhật tiến độ xử lý bảo trì (`InProgress`, `Completed`) | `200`, `400` |
-
----
-
-## 👥 Phân Công Nhóm & Quy Trình GitHub
-
-Nhóm gồm **4 thành viên**, làm việc theo mô hình nhánh tính năng (Feature Branching). Xem chi tiết tại [docs/GITHUB_WORKFLOW.md](docs/GITHUB_WORKFLOW.md) và [CONTRIBUTING.md](CONTRIBUTING.md).
-
-- **`main`**: Nhánh chính được bảo vệ, chỉ chứa code đã kiểm duyệt.
-- **`feature/server-api`** (Thành viên 1): C++ Web Server, routing, RESTful API, Makefile.
-- **`feature/database`** (Thành viên 2): MariaDB, schema.sql, database.h, database.cpp, CRUD.
-- **`feature/frontend`** (Thành viên 3): HTML, CSS, JavaScript, Dashboard UI.
-- **`feature/testing-deployment`** (Thành viên 4): Kiểm thử API, test cases, systemd service, deploy guide.
+Để ứng dụng tự động chạy nền dưới dạng dịch vụ hệ điều hành Ubuntu:
+1. Sao chép file unit mẫu:
+   ```bash
+   sudo cp config/lab-management.service /etc/systemd/system/
+   sudo systemctl daemon-reload
+   ```
+2. Bật và khởi động dịch vụ:
+   ```bash
+   sudo systemctl enable --now lab-management
+   ```
+3. Kiểm tra trạng thái và theo dõi nhật ký:
+   ```bash
+   systemctl status lab-management
+   journalctl -u lab-management -f
+   ```
 
 ---
 
-## 🔒 Quy Định Bảo Mật & Thông Tin Bản Quyền
+## 11. Xử Lý Các Sự Cố Thường Gặp (Troubleshooting)
 
-- Không commit mật khẩu thật, secrets hoặc file `.env` lên GitHub.
-- CSDL chỉ cấp quyền cho user `lab_user`, không dùng quyền root.
-- Dự án phát triển cho môn học theo giấy phép mã nguồn mở MIT.
-- **Repository Owner:** [tit-coder](https://github.com/tit-coder).
+1. **Lỗi `Cannot start server on port 8080`**:
+   - Đang có tiến trình khác chiếm cổng 8080.
+   - Dùng lệnh `ss -tulpn | grep 8080` để tìm và `pkill -f "./server"` để tắt tiến trình cũ.
+2. **Lỗi `Access denied for user 'labapp'`**:
+   - Kiểm tra mật khẩu trong `.env` đã trùng khớp với câu lệnh `CREATE USER` trong MariaDB chưa.
+3. **Thanh trạng thái báo đỏ "Cơ sở dữ liệu MariaDB mất kết nối"**:
+   - Kiểm tra dịch vụ MariaDB: `sudo systemctl status mariadb`.
+   - Nếu MariaDB bị tắt, chạy: `sudo systemctl start mariadb`. Hệ thống C++ có tính năng tự động kết nối lại (`auto-reconnect`), sẽ tự khôi phục kết nối ngay lập tức mà không cần khởi động lại server.
