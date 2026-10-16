@@ -1,0 +1,27 @@
+[Unit]
+Description=Lab Device Web Server (C++ & MariaDB)
+After=network.target mariadb.service
+Wants=mariadb.service
+
+[Service]
+Type=simple
+User=hoai-vy-nguyen
+Group=hoai-vy-nguyen
+WorkingDirectory=/home/hoai-vy-nguyen/lab-device-server
+EnvironmentFile=/home/hoai-vy-nguyen/lab-device-server/.env
+ExecStart=/home/hoai-vy-nguyen/lab-device-server/server
+Restart=on-failure
+RestartSec=5s
+
+# Security sandboxing
+ProtectSystem=full
+NoNewPrivileges=true
+PrivateTmp=true
+
+# Standard Output & Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=lab-device-server
+
+[Install]
+WantedBy=multi-user.target
