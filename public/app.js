@@ -1,433 +1,637 @@
-// =============================================================================
-// Lab Management Server - Frontend Client Logic
-// =============================================================================
+/**
+ * ====================================================================
+ * Frontend Controller for Computer Lab Management System
+ * Pure Vanilla JavaScript with Fetch API
+ * Connects directly to C++ HTTP RESTful Server & MariaDB Backend
+ * ====================================================================
+ */
 
-const API_BASE = '/api';
+document.addEventListener("DOMContentLoaded", () => {
+    // State
+    let currentDevices = [];
+    let deleteTargetId = null;
 
-// State variables
-let currentDevices = [];
+    // DOM Elements
+    const systemHealth = document.getElementById("systemHealth");
+    const healthText = document.getElementById("healthText");
+    const dbAlert = document.getElementById("dbAlert");
 
-// DOM Elements
-const healthBadge = document.getElementById('health-badge');
-const uptimeText = document.getElementById('uptime-text');
+    // Stats
+    const statTotal = document.getElementById("statTotal");
+    const statActive = document.getElementById("statActive");
+    const statBroken = document.getElementById("statBroken");
+    const statRepairing = document.getElementById("statRepairing");
 
-const statTotal = document.getElementById('stat-total');
-const statActive = document.getElementById('stat-active');
-const statBroken = document.getElementById('stat-broken');
-const statRepairing = document.getElementById('stat-repairing');
-const statPending = document.getElementById('stat-pending');
+    // Tabs
+    const tabButtons = document.querySelectorAll(".tab-btn");
+    const tabPanes = document.querySelectorAll(".tab-pane");
 
-const searchInput = document.getElementById('search-input');
-const filterRoom = document.getElementById('filter-room');
-const filterStatus = document.getElementById('filter-status');
-const filterMaintStatus = document.getElementById('filter-maintenance-status');
+    // Devices View
+    const deviceSearch = document.getElementById("deviceSearch");
+    const deviceRoomFilter = document.getElementById("deviceRoomFilter");
+    const deviceStatusFilter = document.getElementById("deviceStatusFilter");
+    const btnRefreshDevices = document.getElementById("btnRefreshDevices");
+    const devicesTableBody = document.getElementById("devicesTableBody");
+    const btnOpenAddDeviceModal = document.getElementById("btnOpenAddDeviceModal");
 
-const deviceCount = document.getElementById('device-count');
-const deviceTableBody = document.getElementById('device-table-body');
-const maintenanceTableBody = document.getElementById('maintenance-table-body');
+    // Maintenance View
+    const maintStatusFilter = document.getElementById("maintStatusFilter");
+    const btnRefreshMaintenance = document.getElementById("btnRefreshMaintenance");
+    const maintTableBody = document.getElementById("maintTableBody");
+    const btnOpenAddMaintModal = document.getElementById("btnOpenAddMaintModal");
 
-const btnRefresh = document.getElementById('btn-refresh');
-const btnAddDevice = document.getElementById('btn-add-device');
+    // Modals
+    const addDeviceModal = document.getElementById("addDeviceModal");
+    const addDeviceForm = document.getElementById("addDeviceForm");
+    const editDeviceModal = document.getElementById("editDeviceModal");
+    const editDeviceForm = document.getElementById("editDeviceForm");
+    const addMaintModal = document.getElementById("addMaintModal");
+    const addMaintForm = document.getElementById("addMaintForm");
+    const maintDeviceSelect = document.getElementById("maintDeviceSelect");
+    const updateMaintModal = document.getElementById("updateMaintModal");
+    const updateMaintForm = document.getElementById("updateMaintForm");
+    const deleteConfirmModal = document.getElementById("deleteConfirmModal");
+    const btnConfirmDelete = document.getElementById("btnConfirmDelete");
+    const deleteDeviceCodeText = document.getElementById("deleteDeviceCodeText");
 
-// Device Modal Elements
-const deviceModal = document.getElementById('device-modal');
-const modalTitle = document.getElementById('modal-title');
-const deviceForm = document.getElementById('device-form');
-const formDeviceId = document.getElementById('form-device-id');
-const formDeviceCode = document.getElementById('form-device-code');
-const formDeviceName = document.getElementById('form-device-name');
-const formDeviceType = document.getElementById('form-device-type');
-const formDeviceRoom = document.getElementById('form-device-room');
-const formDeviceStatus = document.getElementById('form-device-status');
-const modalCloseBtn = document.getElementById('modal-close-btn');
-const modalCancelBtn = document.getElementById('modal-cancel-btn');
+    // Toast Container
+    const toastContainer = document.getElementById("toastContainer");
 
-// Maintenance Modal Elements
-const maintenanceModal = document.getElementById('maintenance-modal');
-const maintenanceForm = document.getElementById('maintenance-form');
-const formMaintDeviceId = document.getElementById('form-maint-device-id');
-const maintDeviceInfo = document.getElementById('maint-device-info');
-const formMaintDesc = document.getElementById('form-maint-desc');
-const maintModalCloseBtn = document.getElementById('maint-modal-close-btn');
-const maintModalCancelBtn = document.getElementById('maint-modal-cancel-btn');
+    // =========================================================
+    // Utilities: Toast & Modal Management
+    // =========================================================
+    function showToast(message, type = "info") {
+        const toast = document.createElement("div");
+        toast.className = `toast toast-${type}`;
+        
+        let icon = "ℹ️";
+        if (type === "success") icon = "✅";
+        if (type === "error") icon = "❌";
+        if (type === "warning") icon = "⚠️";
 
-const toastContainer = document.getElementById('toast-container');
+        toast.innerHTML = `<span>${icon}</span> <span>${escapeHtml(message)}</span>`;
+        toastContainer.appendChild(toast);
 
-// -----------------------------------------------------------------------------
-// Toast Notification Utility
-// -----------------------------------------------------------------------------
-function showToast(message, type = 'info') {
-    const toast = document.createElement('div');
-    toast.className = `toast ${type === 'error' ? 'toast-error' : type === 'success' ? 'toast-success' : ''}`;
-    toast.textContent = message;
-    toastContainer.appendChild(toast);
+        setTimeout(() => {
+            toast.style.opacity = "0";
+            toast.style.transform = "translateX(40px)";
+            setTimeout(() => toast.remove(), 250);
+        }, 4000);
+    }
 
-    setTimeout(() => {
-        toast.remove();
-    }, 3500);
-}
+    function openModal(modal) {
+        modal.classList.add("open");
+    }
 
-// -----------------------------------------------------------------------------
-// 1. Health Check
-// -----------------------------------------------------------------------------
-async function fetchHealth() {
-    try {
-        const res = await fetch(`${API_BASE}/health`);
-        const data = await res.json();
-        if (data.status === 'healthy') {
-            healthBadge.className = 'badge badge-healthy';
-            healthBadge.innerHTML = '<span class="status-dot"></span> Server & MariaDB Online';
+    function closeModal(modal) {
+        modal.classList.remove("open");
+    }
+
+    document.querySelectorAll("[data-close-modal]").forEach(btn => {
+        btn.addEventListener("click", () => {
+            const modal = btn.closest(".modal-backdrop");
+            if (modal) closeModal(modal);
+        });
+    });
+
+    window.addEventListener("click", (e) => {
+        if (e.target.classList.contains("modal-backdrop")) {
+            closeModal(e.target);
+        }
+    });
+
+    function escapeHtml(str) {
+        if (str === null || str === undefined) return "";
+        return String(str)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    function getBadgeHtml(status, isMaintenance = false) {
+        if (!isMaintenance) {
+            if (status === "Active") return `<span class="badge badge-active">● Hoạt động</span>`;
+            if (status === "Broken") return `<span class="badge badge-broken">● Gặp sự cố</span>`;
+            if (status === "Repairing") return `<span class="badge badge-repairing">● Đang sửa</span>`;
+            return `<span class="badge">${escapeHtml(status)}</span>`;
         } else {
-            healthBadge.className = 'badge badge-degraded';
-            healthBadge.innerHTML = '<span class="status-dot"></span> MariaDB Chưa kết nối';
+            if (status === "Pending") return `<span class="badge badge-pending">🕒 Chờ xử lý</span>`;
+            if (status === "InProgress") return `<span class="badge badge-inprogress">🔧 Đang sửa</span>`;
+            if (status === "Completed") return `<span class="badge badge-completed">✅ Đã xong</span>`;
+            return `<span class="badge">${escapeHtml(status)}</span>`;
         }
-        if (data.uptime_seconds !== undefined) {
-            uptimeText.textContent = `Uptime: ${data.uptime_seconds}s | Port: 8080`;
-        }
-    } catch (err) {
-        healthBadge.className = 'badge badge-degraded';
-        healthBadge.innerHTML = '<span class="status-dot"></span> Không kết nối được Server';
-    }
-}
-
-// -----------------------------------------------------------------------------
-// 2. Fetch System Statistics
-// -----------------------------------------------------------------------------
-async function fetchStats() {
-    try {
-        const res = await fetch(`${API_BASE}/stats`);
-        const json = await res.json();
-        if (json.success && json.data) {
-            const s = json.data;
-            statTotal.textContent = s.total_devices || 0;
-            statActive.textContent = s.active_devices || 0;
-            statBroken.textContent = s.broken_devices || 0;
-            statRepairing.textContent = s.repairing_devices || 0;
-            statPending.textContent = s.pending_maintenance || 0;
-        }
-    } catch (err) {
-        console.error('Lỗi tải thống kê:', err);
-    }
-}
-
-// -----------------------------------------------------------------------------
-// 3. Devices CRUD
-// -----------------------------------------------------------------------------
-async function fetchDevices() {
-    try {
-        const params = new URLSearchParams();
-        if (searchInput.value.trim()) params.append('search', searchInput.value.trim());
-        if (filterRoom.value) params.append('room', filterRoom.value);
-        if (filterStatus.value) params.append('status', filterStatus.value);
-
-        const res = await fetch(`${API_BASE}/devices?${params.toString()}`);
-        const json = await res.json();
-
-        if (json.success) {
-            currentDevices = json.data || [];
-            renderDevicesTable(currentDevices);
-        } else {
-            deviceTableBody.innerHTML = `<tr><td colspan="7" class="loading-cell text-danger">Lỗi: ${json.error}</td></tr>`;
-        }
-    } catch (err) {
-        deviceTableBody.innerHTML = `<tr><td colspan="7" class="loading-cell">Không thể kết nối đến máy chủ API.</td></tr>`;
-    }
-}
-
-function renderDevicesTable(devices) {
-    deviceCount.textContent = devices.length;
-    if (devices.length === 0) {
-        deviceTableBody.innerHTML = `<tr><td colspan="7" class="loading-cell">Không có thiết bị nào phù hợp tiêu chí tìm kiếm.</td></tr>`;
-        return;
     }
 
-    deviceTableBody.innerHTML = devices.map(d => {
-        let statusBadgeClass = 'badge-active';
-        let statusLabel = 'Hoạt động';
-        if (d.status === 'Broken') {
-            statusBadgeClass = 'badge-broken';
-            statusLabel = 'Hỏng hóc';
-        } else if (d.status === 'Repairing') {
-            statusBadgeClass = 'badge-repairing';
-            statusLabel = 'Đang sửa chữa';
-        }
+    // =========================================================
+    // Tab Switching
+    // =========================================================
+    tabButtons.forEach(btn => {
+        btn.addEventListener("click", () => {
+            const targetId = btn.dataset.tab;
+            tabButtons.forEach(b => b.classList.remove("active"));
+            tabPanes.forEach(p => p.classList.remove("active"));
 
-        return `
+            btn.classList.add("active");
+            const targetPane = document.getElementById(targetId);
+            if (targetPane) targetPane.classList.add("active");
+
+            if (targetId === "tabDevices") {
+                loadDevices();
+                loadStats();
+            } else if (targetId === "tabMaintenance") {
+                loadMaintenance();
+            }
+        });
+    });
+
+    // =========================================================
+    // API Calls: Health Check
+    // =========================================================
+    async function checkHealth() {
+        try {
+            const res = await fetch("/api/health");
+            const data = await res.json();
+
+            if (res.ok && data.database === "connected") {
+                systemHealth.className = "status-pill status-online";
+                healthText.textContent = "Hệ thống & MariaDB: Trực tuyến";
+                dbAlert.classList.add("hidden");
+            } else {
+                systemHealth.className = "status-pill status-offline";
+                healthText.textContent = "Cơ sở dữ liệu MariaDB mất kết nối";
+                dbAlert.classList.remove("hidden");
+            }
+        } catch (err) {
+            systemHealth.className = "status-pill status-offline";
+            healthText.textContent = "Không thể kết nối C++ Web Server";
+            dbAlert.classList.remove("hidden");
+        }
+    }
+
+    // =========================================================
+    // API Calls: Stats
+    // =========================================================
+    async function loadStats() {
+        try {
+            const res = await fetch("/api/stats");
+            const json = await res.json();
+            if (res.ok && json.success) {
+                const d = json.data;
+                statTotal.textContent = d.total ?? 0;
+                statActive.textContent = d.active ?? 0;
+                statBroken.textContent = d.broken ?? 0;
+                statRepairing.textContent = d.repairing ?? 0;
+            }
+        } catch (err) {
+            console.error("Lỗi tải thống kê:", err);
+        }
+    }
+
+    // =========================================================
+    // API Calls: Devices View
+    // =========================================================
+    async function loadDevices() {
+        devicesTableBody.innerHTML = `
             <tr>
-                <td><strong>${escapeHtml(d.device_code)}</strong></td>
-                <td>${escapeHtml(d.device_name)}</td>
-                <td><span class="badge">${escapeHtml(d.device_type)}</span></td>
-                <td><strong>${escapeHtml(d.room)}</strong></td>
-                <td><span class="badge ${statusBadgeClass}">${statusLabel}</span></td>
-                <td style="font-size:0.8rem; color:var(--text-muted);">${escapeHtml(d.created_at || '-')}</td>
-                <td class="actions-cell">
-                    <button class="btn btn-secondary btn-sm" onclick="handleEditDevice(${d.id})">✏️ Sửa</button>
-                    <button class="btn btn-secondary btn-sm" onclick="handleReportIssue(${d.id}, '${escapeHtml(d.device_code)}', '${escapeHtml(d.device_name)}')">⚠️ Báo hỏng</button>
-                    <button class="btn btn-danger btn-sm" onclick="handleDeleteDevice(${d.id}, '${escapeHtml(d.device_code)}')">🗑️ Xóa</button>
+                <td colspan="8" class="text-center py-4 text-muted">
+                    Đang tải dữ liệu từ C++ Backend...
                 </td>
             </tr>
         `;
-    }).join('');
-}
 
-// -----------------------------------------------------------------------------
-// 4. Maintenance Logs
-// -----------------------------------------------------------------------------
-async function fetchMaintenanceLogs() {
-    try {
+        const room = deviceRoomFilter.value;
+        const status = deviceStatusFilter.value;
+        const search = deviceSearch.value.trim();
+
         const params = new URLSearchParams();
-        if (filterMaintStatus.value) params.append('status', filterMaintStatus.value);
+        if (room) params.append("room", room);
+        if (status) params.append("status", status);
+        if (search) params.append("search", search);
 
-        const res = await fetch(`${API_BASE}/maintenance?${params.toString()}`);
-        const json = await res.json();
+        try {
+            const res = await fetch(`/api/devices?${params.toString()}`);
+            const json = await res.json();
 
-        if (json.success) {
-            renderMaintenanceTable(json.data || []);
-        } else {
-            maintenanceTableBody.innerHTML = `<tr><td colspan="7" class="loading-cell">Lỗi: ${json.error}</td></tr>`;
+            if (!res.ok || !json.success) {
+                devicesTableBody.innerHTML = `
+                    <tr>
+                        <td colspan="8" class="text-center py-4 text-danger">
+                            ❌ ${escapeHtml(json.error || "Không thể tải danh sách thiết bị")}
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            currentDevices = json.data;
+            renderDevicesTable(currentDevices);
+            updateDeviceSelectOptions(currentDevices);
+        } catch (err) {
+            devicesTableBody.innerHTML = `
+                <tr>
+                    <td colspan="8" class="text-center py-4 text-danger">
+                        ❌ Lỗi kết nối mạng tới C++ Server
+                    </td>
+                </tr>
+            `;
         }
-    } catch (err) {
-        maintenanceTableBody.innerHTML = `<tr><td colspan="7" class="loading-cell">Không thể kết nối đến máy chủ API.</td></tr>`;
     }
-}
 
-function renderMaintenanceTable(logs) {
-    if (logs.length === 0) {
-        maintenanceTableBody.innerHTML = `<tr><td colspan="7" class="loading-cell">Không có ghi nhận bảo trì nào.</td></tr>`;
-        return;
-    }
-
-    maintenanceTableBody.innerHTML = logs.map(m => {
-        let badgeClass = 'badge-pending';
-        let label = 'Chờ xử lý';
-        if (m.status === 'InProgress') {
-            badgeClass = 'badge-inprogress';
-            label = 'Đang xử lý';
-        } else if (m.status === 'Completed') {
-            badgeClass = 'badge-completed';
-            label = 'Đã hoàn thành';
+    function renderDevicesTable(devices) {
+        if (!devices || devices.length === 0) {
+            devicesTableBody.innerHTML = `
+                <tr>
+                    <td colspan="8" class="text-center py-4 text-muted">
+                        Không có thiết bị nào phù hợp với bộ lọc.
+                    </td>
+                </tr>
+            `;
+            return;
         }
 
-        let actionsHtml = '';
-        if (m.status === 'Pending') {
-            actionsHtml = `<button class="btn btn-secondary btn-sm" onclick="changeMaintenanceStatus(${m.id}, 'InProgress')">Bắt đầu xử lý 🔧</button>`;
-        } else if (m.status === 'InProgress') {
-            actionsHtml = `<button class="btn btn-primary btn-sm" onclick="changeMaintenanceStatus(${m.id}, 'Completed')">Hoàn thành ✅</button>`;
-        } else {
-            actionsHtml = `<span style="color:var(--success); font-weight:600; font-size:0.8rem;">Đã giải quyết</span>`;
-        }
-
-        return `
+        devicesTableBody.innerHTML = devices.map(d => `
             <tr>
-                <td>#${m.id}</td>
-                <td><strong>${escapeHtml(m.device_code || ('ID:' + m.device_id))}</strong></td>
-                <td>${escapeHtml(m.issue_description)}</td>
-                <td><span class="badge ${badgeClass}">${label}</span></td>
-                <td style="font-size:0.8rem; color:var(--text-muted);">${escapeHtml(m.created_at || '-')}</td>
-                <td style="font-size:0.8rem; color:var(--text-muted);">${escapeHtml(m.completed_at || '-')}</td>
-                <td class="text-right">${actionsHtml}</td>
+                <td><strong>#${d.id}</strong></td>
+                <td><code>${escapeHtml(d.device_code)}</code></td>
+                <td><strong>${escapeHtml(d.device_name)}</strong></td>
+                <td>${escapeHtml(d.device_type)}</td>
+                <td>📍 ${escapeHtml(d.room)}</td>
+                <td>${getBadgeHtml(d.status)}</td>
+                <td class="text-muted" style="font-size: 0.8rem;">${escapeHtml(d.created_at || "--")}</td>
+                <td class="table-actions">
+                    <button class="btn btn-secondary btn-sm" onclick="window.onEditDevice(${d.id})" title="Sửa thông tin">
+                        ✏️ Sửa
+                    </button>
+                    <button class="btn btn-warning btn-sm" onclick="window.onReportIssue(${d.id})" title="Báo sự cố">
+                        ⚠️ Báo hỏng
+                    </button>
+                    <button class="btn btn-danger btn-sm" onclick="window.onDeleteDevice(${d.id}, '${escapeHtml(d.device_code)}')" title="Xóa thiết bị">
+                        🗑️ Xóa
+                    </button>
+                </td>
+            </tr>
+        `).join("");
+    }
+
+    function updateDeviceSelectOptions(devices) {
+        maintDeviceSelect.innerHTML = `<option value="">-- Chọn thiết bị --</option>` +
+            devices.map(d => `<option value="${d.id}">#${d.id} - ${escapeHtml(d.device_code)} (${escapeHtml(d.device_name)} - ${escapeHtml(d.room)})</option>`).join("");
+    }
+
+    // Filter events
+    deviceRoomFilter.addEventListener("change", loadDevices);
+    deviceStatusFilter.addEventListener("change", loadDevices);
+    btnRefreshDevices.addEventListener("click", () => {
+        loadDevices();
+        loadStats();
+        checkHealth();
+    });
+
+    let searchTimer = null;
+    deviceSearch.addEventListener("input", () => {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(loadDevices, 300);
+    });
+
+    // =========================================================
+    // Add Device Modal & Action
+    // =========================================================
+    btnOpenAddDeviceModal.addEventListener("click", () => {
+        addDeviceForm.reset();
+        openModal(addDeviceModal);
+    });
+
+    addDeviceForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const payload = {
+            device_code: document.getElementById("newDeviceCode").value.trim(),
+            device_name: document.getElementById("newDeviceName").value.trim(),
+            device_type: document.getElementById("newDeviceType").value.trim(),
+            room: document.getElementById("newDeviceRoom").value.trim(),
+            status: document.getElementById("newDeviceStatus").value
+        };
+
+        const btnSubmit = document.getElementById("btnSubmitAddDevice");
+        btnSubmit.disabled = true;
+        btnSubmit.textContent = "Đang lưu...";
+
+        try {
+            const res = await fetch("/api/devices", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+            const json = await res.json();
+
+            if (res.status === 201 && json.success) {
+                showToast("Thêm thiết bị mới thành công!", "success");
+                closeModal(addDeviceModal);
+                loadDevices();
+                loadStats();
+            } else {
+                showToast(json.error || "Thêm thiết bị thất bại", "error");
+            }
+        } catch (err) {
+            showToast("Lỗi kết nối máy chủ", "error");
+        } finally {
+            btnSubmit.disabled = false;
+            btnSubmit.textContent = "Lưu thiết bị";
+        }
+    });
+
+    // =========================================================
+    // Edit Device Action
+    // =========================================================
+    window.onEditDevice = async function(id) {
+        try {
+            const res = await fetch(`/api/devices/${id}`);
+            const json = await res.json();
+            if (res.ok && json.success) {
+                const d = json.data;
+                document.getElementById("editDeviceId").value = d.id;
+                document.getElementById("editDeviceCode").value = d.device_code;
+                document.getElementById("editDeviceName").value = d.device_name;
+                document.getElementById("editDeviceType").value = d.device_type;
+                document.getElementById("editDeviceRoom").value = d.room;
+                document.getElementById("editDeviceStatus").value = d.status;
+
+                openModal(editDeviceModal);
+            } else {
+                showToast(json.error || "Không thể lấy thông tin thiết bị", "error");
+            }
+        } catch (err) {
+            showToast("Lỗi kết nối máy chủ", "error");
+        }
+    };
+
+    editDeviceForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const id = document.getElementById("editDeviceId").value;
+        const payload = {
+            device_code: document.getElementById("editDeviceCode").value.trim(),
+            device_name: document.getElementById("editDeviceName").value.trim(),
+            device_type: document.getElementById("editDeviceType").value.trim(),
+            room: document.getElementById("editDeviceRoom").value.trim(),
+            status: document.getElementById("editDeviceStatus").value
+        };
+
+        const btnSubmit = document.getElementById("btnSubmitEditDevice");
+        btnSubmit.disabled = true;
+        btnSubmit.textContent = "Đang cập nhật...";
+
+        try {
+            const res = await fetch(`/api/devices/${id}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+            const json = await res.json();
+
+            if (res.ok && json.success) {
+                showToast("Cập nhật thông tin thiết bị thành công!", "success");
+                closeModal(editDeviceModal);
+                loadDevices();
+                loadStats();
+            } else {
+                showToast(json.error || "Cập nhật thất bại", "error");
+            }
+        } catch (err) {
+            showToast("Lỗi kết nối máy chủ", "error");
+        } finally {
+            btnSubmit.disabled = false;
+            btnSubmit.textContent = "Cập nhật";
+        }
+    });
+
+    // =========================================================
+    // Delete Device Action (With History Preservation Notice)
+    // =========================================================
+    window.onDeleteDevice = function(id, code) {
+        deleteTargetId = id;
+        deleteDeviceCodeText.textContent = code;
+        openModal(deleteConfirmModal);
+    };
+
+    btnConfirmDelete.addEventListener("click", async () => {
+        if (!deleteTargetId) return;
+
+        btnConfirmDelete.disabled = true;
+        btnConfirmDelete.textContent = "Đang xóa...";
+
+        try {
+            const res = await fetch(`/api/devices/${deleteTargetId}`, {
+                method: "DELETE"
+            });
+            const json = await res.json();
+
+            if (res.ok && json.success) {
+                showToast("Đã xóa thiết bị thành công", "success");
+                closeModal(deleteConfirmModal);
+                loadDevices();
+                loadStats();
+            } else if (res.status === 409) {
+                // Conflict due to preservation policy!
+                showToast(json.error || "Không thể xóa: Đã có lịch sử bảo trì liên kết!", "warning");
+                closeModal(deleteConfirmModal);
+            } else {
+                showToast(json.error || "Không thể xóa thiết bị", "error");
+                closeModal(deleteConfirmModal);
+            }
+        } catch (err) {
+            showToast("Lỗi kết nối máy chủ khi xóa", "error");
+        } finally {
+            btnConfirmDelete.disabled = false;
+            btnConfirmDelete.textContent = "Đồng ý xóa";
+            deleteTargetId = null;
+        }
+    });
+
+    // =========================================================
+    // Maintenance View & Actions
+    // =========================================================
+    btnOpenAddMaintModal.addEventListener("click", () => {
+        addMaintForm.reset();
+        openModal(addMaintModal);
+    });
+
+    window.onReportIssue = function(deviceId) {
+        addMaintForm.reset();
+        maintDeviceSelect.value = deviceId;
+        openModal(addMaintModal);
+    };
+
+    addMaintForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const deviceId = parseInt(maintDeviceSelect.value, 10);
+        const description = document.getElementById("maintDescription").value.trim();
+        const status = document.getElementById("maintStatus").value;
+
+        if (!deviceId) {
+            showToast("Vui lòng chọn thiết bị", "warning");
+            return;
+        }
+
+        const btnSubmit = document.getElementById("btnSubmitAddMaint");
+        btnSubmit.disabled = true;
+        btnSubmit.textContent = "Đang ghi nhận...";
+
+        try {
+            const res = await fetch("/api/maintenance", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    device_id: deviceId,
+                    description: description,
+                    status: status
+                })
+            });
+            const json = await res.json();
+
+            if (res.status === 201 && json.success) {
+                showToast("Đã ghi nhận sự cố và tạo phiếu bảo trì!", "success");
+                closeModal(addMaintModal);
+                loadMaintenance();
+                loadDevices();
+                loadStats();
+            } else {
+                showToast(json.error || "Không thể tạo phiếu bảo trì", "error");
+            }
+        } catch (err) {
+            showToast("Lỗi kết nối máy chủ", "error");
+        } finally {
+            btnSubmit.disabled = false;
+            btnSubmit.textContent = "Tạo phiếu bảo trì";
+        }
+    });
+
+    async function loadMaintenance() {
+        maintTableBody.innerHTML = `
+            <tr>
+                <td colspan="8" class="text-center py-4 text-muted">
+                    Đang tải danh sách bảo trì từ C++ Backend...
+                </td>
             </tr>
         `;
-    }).join('');
-}
 
-async function changeMaintenanceStatus(id, newStatus) {
-    try {
-        const res = await fetch(`${API_BASE}/maintenance/${id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status: newStatus })
-        });
-        const json = await res.json();
-        if (json.success) {
-            showToast(`Đã cập nhật trạng thái sự cố sang: ${newStatus}`, 'success');
-            refreshAll();
-        } else {
-            showToast(json.error || 'Cập nhật thất bại', 'error');
+        const status = maintStatusFilter.value;
+        const params = new URLSearchParams();
+        if (status) params.append("status", status);
+
+        try {
+            const res = await fetch(`/api/maintenance?${params.toString()}`);
+            const json = await res.json();
+
+            if (!res.ok || !json.success) {
+                maintTableBody.innerHTML = `
+                    <tr>
+                        <td colspan="8" class="text-center py-4 text-danger">
+                            ❌ ${escapeHtml(json.error || "Không thể tải danh sách phiếu bảo trì")}
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            renderMaintenanceTable(json.data);
+        } catch (err) {
+            maintTableBody.innerHTML = `
+                <tr>
+                    <td colspan="8" class="text-center py-4 text-danger">
+                        ❌ Lỗi kết nối mạng tới C++ Server
+                    </td>
+                </tr>
+            `;
         }
-    } catch (err) {
-        showToast('Lỗi khi gửi yêu cầu cập nhật', 'error');
-    }
-}
-
-// -----------------------------------------------------------------------------
-// Modal Handlers & Actions
-// -----------------------------------------------------------------------------
-function openAddDeviceModal() {
-    modalTitle.textContent = 'Thêm thiết bị mới';
-    formDeviceId.value = '';
-    formDeviceCode.value = '';
-    formDeviceCode.disabled = false;
-    formDeviceName.value = '';
-    formDeviceType.value = 'PC';
-    formDeviceRoom.value = 'LAB101';
-    formDeviceStatus.value = 'Active';
-    deviceModal.classList.remove('hidden');
-}
-
-window.handleEditDevice = function(id) {
-    const dev = currentDevices.find(d => d.id === id);
-    if (!dev) return;
-
-    modalTitle.textContent = `Chỉnh sửa thiết bị #${dev.id}`;
-    formDeviceId.value = dev.id;
-    formDeviceCode.value = dev.device_code;
-    formDeviceCode.disabled = true; // Mã thiết bị không được sửa
-    formDeviceName.value = dev.device_name;
-    formDeviceType.value = dev.device_type;
-    formDeviceRoom.value = dev.room;
-    formDeviceStatus.value = dev.status;
-    deviceModal.classList.remove('hidden');
-};
-
-function closeDeviceModal() {
-    deviceModal.classList.add('hidden');
-}
-
-window.handleDeleteDevice = async function(id, code) {
-    if (!confirm(`Bạn có chắc chắn muốn xóa thiết bị [${code}] không?\nLưu ý: Các bản ghi bảo trì liên quan cũng sẽ bị xóa.`)) {
-        return;
     }
 
-    try {
-        const res = await fetch(`${API_BASE}/devices/${id}`, { method: 'DELETE' });
-        const json = await res.json();
-        if (json.success) {
-            showToast(`Đã xóa thiết bị ${code} thành công!`, 'success');
-            refreshAll();
-        } else {
-            showToast(json.error || 'Không thể xóa thiết bị', 'error');
+    function renderMaintenanceTable(logs) {
+        if (!logs || logs.length === 0) {
+            maintTableBody.innerHTML = `
+                <tr>
+                    <td colspan="8" class="text-center py-4 text-muted">
+                        Không có phiếu bảo trì nào.
+                    </td>
+                </tr>
+            `;
+            return;
         }
-    } catch (err) {
-        showToast('Lỗi kết nối khi xóa thiết bị', 'error');
+
+        maintTableBody.innerHTML = logs.map(m => `
+            <tr>
+                <td><strong>#${m.id}</strong></td>
+                <td><code>${escapeHtml(m.device_code)}</code></td>
+                <td>${escapeHtml(m.device_name)} <br><small class="text-muted">📍 ${escapeHtml(m.room)}</small></td>
+                <td>${escapeHtml(m.description)}</td>
+                <td>${getBadgeHtml(m.status, true)}</td>
+                <td class="text-muted" style="font-size: 0.8rem;">${escapeHtml(m.created_at || "--")}</td>
+                <td class="text-muted" style="font-size: 0.8rem;">${escapeHtml(m.completed_at || "--")}</td>
+                <td class="text-center">
+                    <button class="btn btn-secondary btn-sm" onclick="window.onOpenUpdateMaint(${m.id}, '${escapeHtml(m.device_code)} - ${escapeHtml(m.device_name)}', '${escapeHtml(m.status)}', '${escapeHtml(m.description)}')" title="Cập nhật tiến độ">
+                        🔄 Cập nhật tiến độ
+                    </button>
+                </td>
+            </tr>
+        `).join("");
     }
-};
 
-window.handleReportIssue = function(deviceId, deviceCode, deviceName) {
-    formMaintDeviceId.value = deviceId;
-    maintDeviceInfo.textContent = `[${deviceCode}] - ${deviceName}`;
-    formMaintDesc.value = '';
-    maintenanceModal.classList.remove('hidden');
-};
+    maintStatusFilter.addEventListener("change", loadMaintenance);
+    btnRefreshMaintenance.addEventListener("click", () => {
+        loadMaintenance();
+        loadStats();
+    });
 
-function closeMaintenanceModal() {
-    maintenanceModal.classList.add('hidden');
-}
-
-// Form Submit: Device Form (Create or Update)
-deviceForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-
-    const id = formDeviceId.value;
-    const isEdit = Boolean(id);
-
-    const payload = {
-        device_code: formDeviceCode.value.trim(),
-        device_name: formDeviceName.value.trim(),
-        device_type: formDeviceType.value,
-        room: formDeviceRoom.value.trim(),
-        status: formDeviceStatus.value
+    window.onOpenUpdateMaint = function(id, deviceText, currentStatus, currentDesc) {
+        document.getElementById("updateMaintId").value = id;
+        document.getElementById("updateMaintDeviceText").textContent = deviceText;
+        document.getElementById("updateMaintStatus").value = currentStatus;
+        document.getElementById("updateMaintDescription").value = currentDesc;
+        openModal(updateMaintModal);
     };
 
-    try {
-        const url = isEdit ? `${API_BASE}/devices/${id}` : `${API_BASE}/devices`;
-        const method = isEdit ? 'PUT' : 'POST';
+    updateMaintForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const id = document.getElementById("updateMaintId").value;
+        const status = document.getElementById("updateMaintStatus").value;
+        const description = document.getElementById("updateMaintDescription").value.trim();
 
-        const res = await fetch(url, {
-            method: method,
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
+        const btnSubmit = document.getElementById("btnSubmitUpdateMaint");
+        btnSubmit.disabled = true;
+        btnSubmit.textContent = "Đang lưu...";
 
-        const json = await res.json();
-        if (json.success) {
-            showToast(isEdit ? 'Cập nhật thiết bị thành công!' : 'Thêm thiết bị mới thành công!', 'success');
-            closeDeviceModal();
-            refreshAll();
-        } else {
-            showToast(json.error || 'Thao tác không thành công', 'error');
+        try {
+            const res = await fetch(`/api/maintenance/${id}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ status, description })
+            });
+            const json = await res.json();
+
+            if (res.ok && json.success) {
+                showToast("Cập nhật tiến độ bảo trì thành công!", "success");
+                closeModal(updateMaintModal);
+                loadMaintenance();
+                loadDevices();
+                loadStats();
+            } else {
+                showToast(json.error || "Không thể cập nhật phiếu bảo trì", "error");
+            }
+        } catch (err) {
+            showToast("Lỗi kết nối máy chủ", "error");
+        } finally {
+            btnSubmit.disabled = false;
+            btnSubmit.textContent = "Lưu tiến độ";
         }
-    } catch (err) {
-        showToast('Lỗi gửi dữ liệu lên server', 'error');
-    }
-});
+    });
 
-// Form Submit: Maintenance Form
-maintenanceForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
+    // =========================================================
+    // Initial Load & Polling
+    // =========================================================
+    checkHealth();
+    loadStats();
+    loadDevices();
 
-    const payload = {
-        device_id: parseInt(formMaintDeviceId.value, 10),
-        issue_description: formMaintDesc.value.trim(),
-        status: 'Pending'
-    };
-
-    try {
-        const res = await fetch(`${API_BASE}/maintenance`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-
-        const json = await res.json();
-        if (json.success) {
-            showToast('Đã tạo phiếu bảo trì sự cố thành công!', 'success');
-            closeMaintenanceModal();
-            refreshAll();
-        } else {
-            showToast(json.error || 'Tạo phiếu bảo trì thất bại', 'error');
-        }
-    } catch (err) {
-        showToast('Lỗi gửi dữ liệu bảo trì', 'error');
-    }
-});
-
-// -----------------------------------------------------------------------------
-// Utilities & Refresh All
-// -----------------------------------------------------------------------------
-function escapeHtml(str) {
-    if (!str) return '';
-    return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-}
-
-function refreshAll() {
-    fetchHealth();
-    fetchStats();
-    fetchDevices();
-    fetchMaintenanceLogs();
-}
-
-// Event Listeners
-btnAddDevice.addEventListener('click', openAddDeviceModal);
-modalCloseBtn.addEventListener('click', closeDeviceModal);
-modalCancelBtn.addEventListener('click', closeDeviceModal);
-
-maintModalCloseBtn.addEventListener('click', closeMaintenanceModal);
-maintModalCancelBtn.addEventListener('click', closeMaintenanceModal);
-
-btnRefresh.addEventListener('click', () => {
-    refreshAll();
-    showToast('Đã làm mới dữ liệu!', 'info');
-});
-
-let debounceTimer = null;
-searchInput.addEventListener('input', () => {
-    clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(fetchDevices, 300);
-});
-
-filterRoom.addEventListener('change', fetchDevices);
-filterStatus.addEventListener('change', fetchDevices);
-filterMaintStatus.addEventListener('change', fetchMaintenanceLogs);
-
-// Initialize on page load
-document.addEventListener('DOMContentLoaded', () => {
-    refreshAll();
-    // Poll health check every 15 seconds
-    setInterval(fetchHealth, 15000);
+    // Heartbeat every 15 seconds
+    setInterval(checkHealth, 15000);
 });

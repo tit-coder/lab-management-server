@@ -3,152 +3,178 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lab Management Server — Quản lý Thiết bị Phòng máy</title>
-    <link rel="stylesheet" href="style.css">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <title>Hệ Thống Quản Lý Thiết Bị Phòng Máy - C++ & MariaDB</title>
+    <link rel="stylesheet" href="/style.css">
 </head>
 <body>
+    <!-- Header / Navbar -->
     <header class="app-header">
-        <div class="container header-container">
-            <div class="logo-area">
-                <div class="logo-icon">🖥️</div>
-                <div>
-                    <h1>Lab Management Server</h1>
-                    <p class="subtitle">Hệ thống Quản lý Thiết bị & Sự cố Phòng máy</p>
+        <div class="header-container">
+            <div class="brand">
+                <div class="brand-icon">🖥️</div>
+                <div class="brand-text">
+                    <h1>Quản Lý Thiết Bị Phòng Máy</h1>
+                    <span class="subtitle">Đồ án Linux & Mã nguồn mở • C++ Web Server & MariaDB</span>
                 </div>
             </div>
             <div class="header-status">
-                <span id="health-badge" class="badge badge-loading">
-                    <span class="status-dot"></span> Đang kiểm tra server...
-                </span>
-                <span class="uptime" id="uptime-text">Port: 8080</span>
+                <div id="systemHealth" class="status-pill status-loading">
+                    <span class="status-dot"></span>
+                    <span id="healthText">Đang kiểm tra hệ thống...</span>
+                </div>
             </div>
         </div>
     </header>
 
-    <main class="container main-content">
-        <!-- 1. KPI Statistics Dashboard -->
+    <!-- Main Container -->
+    <main class="app-main">
+        <!-- DB Disconnected Alert Banner -->
+        <div id="dbAlert" class="alert-banner alert-danger hidden">
+            ⚠️ <strong>Cảnh báo:</strong> Mất kết nối tới cơ sở dữ liệu MariaDB! Vui lòng kiểm tra dịch vụ MariaDB và cấu hình .env.
+        </div>
+
+        <!-- Dashboard Stats Cards -->
         <section class="stats-grid">
-            <div class="stat-card total">
-                <div class="stat-icon">💻</div>
-                <div class="stat-info">
-                    <span class="stat-label">Tổng thiết bị</span>
-                    <h2 class="stat-value" id="stat-total">0</h2>
+            <div class="stat-card stat-total">
+                <div class="stat-icon">📦</div>
+                <div class="stat-content">
+                    <span class="stat-label">Tổng số thiết bị</span>
+                    <strong class="stat-value" id="statTotal">--</strong>
                 </div>
             </div>
-            <div class="stat-card active">
+            <div class="stat-card stat-active">
                 <div class="stat-icon">✅</div>
-                <div class="stat-info">
-                    <span class="stat-label">Hoạt động tốt</span>
-                    <h2 class="stat-value" id="stat-active">0</h2>
+                <div class="stat-content">
+                    <span class="stat-label">Đang hoạt động (Active)</span>
+                    <strong class="stat-value" id="statActive">--</strong>
                 </div>
             </div>
-            <div class="stat-card broken">
+            <div class="stat-card stat-broken">
                 <div class="stat-icon">⚠️</div>
-                <div class="stat-info">
-                    <span class="stat-label">Bị hỏng hóc</span>
-                    <h2 class="stat-value" id="stat-broken">0</h2>
+                <div class="stat-content">
+                    <span class="stat-label">Gặp sự cố / Hỏng (Broken)</span>
+                    <strong class="stat-value" id="statBroken">--</strong>
                 </div>
             </div>
-            <div class="stat-card repairing">
+            <div class="stat-card stat-repairing">
                 <div class="stat-icon">🔧</div>
-                <div class="stat-info">
-                    <span class="stat-label">Đang sửa chữa</span>
-                    <h2 class="stat-value" id="stat-repairing">0</h2>
-                </div>
-            </div>
-            <div class="stat-card pending">
-                <div class="stat-icon">📋</div>
-                <div class="stat-info">
-                    <span class="stat-label">Chờ bảo trì</span>
-                    <h2 class="stat-value" id="stat-pending">0</h2>
+                <div class="stat-content">
+                    <span class="stat-label">Đang sửa chữa (Repairing)</span>
+                    <strong class="stat-value" id="statRepairing">--</strong>
                 </div>
             </div>
         </section>
 
-        <!-- 2. Controls & Filter Bar -->
-        <section class="card controls-card">
-            <div class="controls-row">
-                <div class="search-box">
-                    <input type="text" id="search-input" placeholder="🔍 Tìm theo mã hoặc tên thiết bị..." />
-                </div>
-                <div class="filter-group">
-                    <select id="filter-room">
-                        <option value="">Tất cả phòng</option>
-                        <option value="LAB101">LAB101</option>
-                        <option value="LAB102">LAB102</option>
-                        <option value="LAB201">LAB201</option>
+        <!-- Navigation Tabs -->
+        <nav class="nav-tabs">
+            <button class="tab-btn active" data-tab="tabDevices">
+                📋 Danh Sách Thiết Bị
+            </button>
+            <button class="tab-btn" data-tab="tabMaintenance">
+                🛠️ Quản Lý Bảo Trì & Sự Cố
+            </button>
+        </nav>
+
+        <!-- TAB 1: Danh sách thiết bị -->
+        <section id="tabDevices" class="tab-pane active">
+            <!-- Filter & Action Toolbar -->
+            <div class="toolbar">
+                <div class="toolbar-filters">
+                    <div class="search-box">
+                        <span class="search-icon">🔍</span>
+                        <input type="text" id="deviceSearch" placeholder="Tìm theo mã hoặc tên thiết bị...">
+                    </div>
+                    <select id="deviceRoomFilter" class="form-select">
+                        <option value="">Tất cả phòng máy</option>
+                        <option value="Room A">Room A</option>
+                        <option value="Room B">Room B</option>
+                        <option value="Room C">Room C</option>
+                        <option value="Lab 101">Lab 101</option>
+                        <option value="Lab 102">Lab 102</option>
                     </select>
-                    <select id="filter-status">
+                    <select id="deviceStatusFilter" class="form-select">
                         <option value="">Tất cả trạng thái</option>
                         <option value="Active">Active (Hoạt động)</option>
                         <option value="Broken">Broken (Hỏng)</option>
                         <option value="Repairing">Repairing (Đang sửa)</option>
                     </select>
-                    <button id="btn-refresh" class="btn btn-secondary" title="Làm mới dữ liệu">🔄 Làm mới</button>
-                    <button id="btn-add-device" class="btn btn-primary">➕ Thêm thiết bị</button>
+                </div>
+                <div class="toolbar-actions">
+                    <button class="btn btn-secondary" id="btnRefreshDevices" title="Tải lại">
+                        🔄 Làm mới
+                    </button>
+                    <button class="btn btn-primary" id="btnOpenAddDeviceModal">
+                        ➕ Thêm thiết bị
+                    </button>
                 </div>
             </div>
-        </section>
 
-        <!-- 3. Device List Section -->
-        <section class="card data-section">
-            <div class="section-header">
-                <h3>Danh sách Thiết bị Phòng máy (<span id="device-count">0</span>)</h3>
-            </div>
-            <div class="table-responsive">
+            <!-- Table Container -->
+            <div class="table-container">
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th>Mã thiết bị</th>
+                            <th style="width: 60px;">ID</th>
+                            <th style="width: 130px;">Mã thiết bị</th>
                             <th>Tên thiết bị</th>
-                            <th>Loại</th>
-                            <th>Phòng</th>
-                            <th>Trạng thái</th>
-                            <th>Ngày đăng ký</th>
-                            <th class="text-right">Thao tác</th>
+                            <th style="width: 140px;">Loại</th>
+                            <th style="width: 130px;">Phòng máy</th>
+                            <th style="width: 140px;">Trạng thái</th>
+                            <th style="width: 160px;">Ngày tạo</th>
+                            <th style="width: 220px;" class="text-center">Thao tác</th>
                         </tr>
                     </thead>
-                    <tbody id="device-table-body">
+                    <tbody id="devicesTableBody">
                         <tr>
-                            <td colspan="7" class="loading-cell">Đang tải danh sách thiết bị...</td>
+                            <td colspan="8" class="text-center py-4 text-muted">
+                                Đang tải danh sách thiết bị từ máy chủ C++...
+                            </td>
                         </tr>
                     </tbody>
                 </table>
             </div>
         </section>
 
-        <!-- 4. Maintenance Logs Section -->
-        <section class="card data-section mt-4">
-            <div class="section-header">
-                <h3>Lịch sử & Sự cố Bảo trì</h3>
-                <div class="filter-group">
-                    <select id="filter-maintenance-status">
-                        <option value="">Tất cả trạng thái bảo trì</option>
+        <!-- TAB 2: Quản lý bảo trì -->
+        <section id="tabMaintenance" class="tab-pane">
+            <div class="toolbar">
+                <div class="toolbar-filters">
+                    <select id="maintStatusFilter" class="form-select">
+                        <option value="">Tất cả tiến độ bảo trì</option>
                         <option value="Pending">Pending (Chờ xử lý)</option>
                         <option value="InProgress">InProgress (Đang xử lý)</option>
-                        <option value="Completed">Completed (Đã xong)</option>
+                        <option value="Completed">Completed (Đã hoàn thành)</option>
                     </select>
                 </div>
+                <div class="toolbar-actions">
+                    <button class="btn btn-secondary" id="btnRefreshMaintenance" title="Tải lại">
+                        🔄 Làm mới
+                    </button>
+                    <button class="btn btn-primary" id="btnOpenAddMaintModal">
+                        ➕ Báo sự cố / Tạo phiếu
+                    </button>
+                </div>
             </div>
-            <div class="table-responsive">
+
+            <div class="table-container">
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th>ID</th>
-                            <th>Mã thiết bị</th>
+                            <th style="width: 60px;">ID</th>
+                            <th style="width: 140px;">Mã thiết bị</th>
+                            <th>Tên thiết bị & Vị trí</th>
                             <th>Mô tả sự cố</th>
-                            <th>Trạng thái xử lý</th>
-                            <th>Thời gian báo</th>
-                            <th>Hoàn thành</th>
-                            <th class="text-right">Chuyển trạng thái</th>
+                            <th style="width: 140px;">Tiến độ</th>
+                            <th style="width: 160px;">Thời gian tạo</th>
+                            <th style="width: 160px;">Thời gian hoàn tất</th>
+                            <th style="width: 180px;" class="text-center">Thao tác</th>
                         </tr>
                     </thead>
-                    <tbody id="maintenance-table-body">
+                    <tbody id="maintTableBody">
                         <tr>
-                            <td colspan="7" class="loading-cell">Đang tải lịch sử bảo trì...</td>
+                            <td colspan="8" class="text-center py-4 text-muted">
+                                Đang tải danh sách phiếu bảo trì từ máy chủ C++...
+                            </td>
                         </tr>
                     </tbody>
                 </table>
@@ -156,84 +182,195 @@
         </section>
     </main>
 
-    <!-- Modal: Add / Edit Device -->
-    <div id="device-modal" class="modal-overlay hidden">
-        <div class="modal-content">
+    <!-- Modal: Thêm thiết bị -->
+    <div id="addDeviceModal" class="modal-backdrop">
+        <div class="modal-dialog">
             <div class="modal-header">
-                <h3 id="modal-title">Thêm thiết bị mới</h3>
-                <button class="modal-close" id="modal-close-btn">&times;</button>
+                <h3>Thêm Thiết Bị Mới</h3>
+                <button class="modal-close" data-close-modal>&times;</button>
             </div>
-            <form id="device-form">
-                <input type="hidden" id="form-device-id">
-                <div class="form-group">
-                    <label for="form-device-code">Mã thiết bị (Duy nhất) <span class="required">*</span></label>
-                    <input type="text" id="form-device-code" required placeholder="Ví dụ: PC-LAB101-05">
-                </div>
-                <div class="form-group">
-                    <label for="form-device-name">Tên thiết bị <span class="required">*</span></label>
-                    <input type="text" id="form-device-name" required placeholder="Ví dụ: Dell OptiPlex 7090">
-                </div>
-                <div class="form-row">
+            <form id="addDeviceForm">
+                <div class="modal-body">
                     <div class="form-group">
-                        <label for="form-device-type">Loại thiết bị <span class="required">*</span></label>
-                        <select id="form-device-type" required>
-                            <option value="PC">PC (Máy tính để bàn)</option>
-                            <option value="Monitor">Monitor (Màn hình)</option>
-                            <option value="Keyboard">Keyboard (Bàn phím)</option>
-                            <option value="Mouse">Mouse (Chuột)</option>
-                            <option value="Network">Network (Switch/Router)</option>
-                            <option value="Other">Other (Khác)</option>
+                        <label for="newDeviceCode">Mã thiết bị <span class="required">*</span></label>
+                        <input type="text" id="newDeviceCode" name="device_code" required maxlength="30" placeholder="VD: PC-005, PRN-001">
+                        <small class="form-hint">Mã thiết bị là duy nhất trong toàn hệ thống.</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="newDeviceName">Tên thiết bị <span class="required">*</span></label>
+                        <input type="text" id="newDeviceName" name="device_name" required maxlength="100" placeholder="VD: Máy tính Dell OptiPlex 7090">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group col-6">
+                            <label for="newDeviceType">Loại thiết bị <span class="required">*</span></label>
+                            <input type="text" id="newDeviceType" name="device_type" required maxlength="50" placeholder="VD: Computer, Monitor, Printer">
+                        </div>
+                        <div class="form-group col-6">
+                            <label for="newDeviceRoom">Phòng máy <span class="required">*</span></label>
+                            <input type="text" id="newDeviceRoom" name="room" required maxlength="50" placeholder="VD: Room A, Lab 101">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="newDeviceStatus">Trạng thái khởi tạo</label>
+                        <select id="newDeviceStatus" name="status">
+                            <option value="Active">Active (Sẵn sàng sử dụng)</option>
+                            <option value="Broken">Broken (Đang hỏng)</option>
+                            <option value="Repairing">Repairing (Đang sửa chữa)</option>
                         </select>
                     </div>
-                    <div class="form-group">
-                        <label for="form-device-room">Phòng máy <span class="required">*</span></label>
-                        <input type="text" id="form-device-room" required placeholder="Ví dụ: LAB101">
-                    </div>
                 </div>
-                <div class="form-group">
-                    <label for="form-device-status">Trạng thái ban đầu</label>
-                    <select id="form-device-status">
-                        <option value="Active">Active (Hoạt động)</option>
-                        <option value="Broken">Broken (Hỏng hóc)</option>
-                        <option value="Repairing">Repairing (Đang sửa chữa)</option>
-                    </select>
-                </div>
-                <div class="modal-actions">
-                    <button type="button" class="btn btn-secondary" id="modal-cancel-btn">Hủy</button>
-                    <button type="submit" class="btn btn-primary" id="modal-save-btn">Lưu thiết bị</button>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-close-modal>Hủy</button>
+                    <button type="submit" class="btn btn-primary" id="btnSubmitAddDevice">Lưu thiết bị</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- Modal: Report Maintenance Issue -->
-    <div id="maintenance-modal" class="modal-overlay hidden">
-        <div class="modal-content">
+    <!-- Modal: Sửa thiết bị -->
+    <div id="editDeviceModal" class="modal-backdrop">
+        <div class="modal-dialog">
             <div class="modal-header">
-                <h3>Ghi nhận Sự cố & Yêu cầu Bảo trì</h3>
-                <button class="modal-close" id="maint-modal-close-btn">&times;</button>
+                <h3>Chỉnh Sửa Thiết Bị</h3>
+                <button class="modal-close" data-close-modal>&times;</button>
             </div>
-            <form id="maintenance-form">
-                <input type="hidden" id="form-maint-device-id">
-                <div class="form-group">
-                    <label>Thiết bị sự cố:</label>
-                    <p id="maint-device-info" class="static-info">Chưa chọn thiết bị</p>
+            <form id="editDeviceForm">
+                <input type="hidden" id="editDeviceId" name="id">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="editDeviceCode">Mã thiết bị <span class="required">*</span></label>
+                        <input type="text" id="editDeviceCode" name="device_code" required maxlength="30">
+                    </div>
+                    <div class="form-group">
+                        <label for="editDeviceName">Tên thiết bị <span class="required">*</span></label>
+                        <input type="text" id="editDeviceName" name="device_name" required maxlength="100">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group col-6">
+                            <label for="editDeviceType">Loại thiết bị <span class="required">*</span></label>
+                            <input type="text" id="editDeviceType" name="device_type" required maxlength="50">
+                        </div>
+                        <div class="form-group col-6">
+                            <label for="editDeviceRoom">Phòng máy <span class="required">*</span></label>
+                            <input type="text" id="editDeviceRoom" name="room" required maxlength="50">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="editDeviceStatus">Trạng thái</label>
+                        <select id="editDeviceStatus" name="status">
+                            <option value="Active">Active (Hoạt động)</option>
+                            <option value="Broken">Broken (Hỏng)</option>
+                            <option value="Repairing">Repairing (Đang sửa chữa)</option>
+                        </select>
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label for="form-maint-desc">Mô tả chi tiết sự cố <span class="required">*</span></label>
-                    <textarea id="form-maint-desc" rows="4" required placeholder="Mô tả hiện tượng hỏng hóc, triệu chứng hoặc lỗi cụ thể..."></textarea>
-                </div>
-                <div class="modal-actions">
-                    <button type="button" class="btn btn-secondary" id="maint-modal-cancel-btn">Hủy</button>
-                    <button type="submit" class="btn btn-danger">Tạo phiếu bảo trì</button>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-close-modal>Hủy</button>
+                    <button type="submit" class="btn btn-primary" id="btnSubmitEditDevice">Cập nhật</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Modal: Ghi nhận sự cố / Tạo phiếu bảo trì -->
+    <div id="addMaintModal" class="modal-backdrop">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h3>Ghi Nhận Sự Cố / Tạo Phiếu Bảo Trì</h3>
+                <button class="modal-close" data-close-modal>&times;</button>
+            </div>
+            <form id="addMaintForm">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="maintDeviceSelect">Chọn thiết bị gặp sự cố <span class="required">*</span></label>
+                        <select id="maintDeviceSelect" name="device_id" required>
+                            <option value="">-- Chọn thiết bị --</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="maintDescription">Mô tả chi tiết sự cố <span class="required">*</span></label>
+                        <textarea id="maintDescription" name="description" rows="3" required placeholder="VD: Hỏng bàn phím, màn hình không lên nguồn, mất kết nối mạng..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="maintStatus">Trạng thái phiếu</label>
+                        <select id="maintStatus" name="status">
+                            <option value="Pending">Pending (Chờ xử lý - Thiết bị sẽ chuyển sang 'Broken')</option>
+                            <option value="InProgress">InProgress (Đang xử lý - Thiết bị sẽ chuyển sang 'Repairing')</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-close-modal>Hủy</button>
+                    <button type="submit" class="btn btn-warning" id="btnSubmitAddMaint">Tạo phiếu bảo trì</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Cập nhật phiếu bảo trì -->
+    <div id="updateMaintModal" class="modal-backdrop">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h3>Cập Nhật Phiếu Bảo Trì</h3>
+                <button class="modal-close" data-close-modal>&times;</button>
+            </div>
+            <form id="updateMaintForm">
+                <input type="hidden" id="updateMaintId" name="id">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>Thiết bị:</label>
+                        <strong id="updateMaintDeviceText" class="text-primary d-block">--</strong>
+                    </div>
+                    <div class="form-group">
+                        <label for="updateMaintDescription">Mô tả / Ghi chú xử lý:</label>
+                        <textarea id="updateMaintDescription" name="description" rows="3"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="updateMaintStatus">Tiến độ xử lý <span class="required">*</span></label>
+                        <select id="updateMaintStatus" name="status" required>
+                            <option value="Pending">Pending (Chờ xử lý - Thiết bị ở trạng thái Broken)</option>
+                            <option value="InProgress">InProgress (Đang sửa chữa - Thiết bị ở trạng thái Repairing)</option>
+                            <option value="Completed">Completed (Đã sửa xong - Thiết bị sẽ hoàn nguyên về Active)</option>
+                        </select>
+                        <small class="form-hint">Khi chọn 'Completed', hệ thống tự động ghi nhận thời gian hoàn tất và chuyển thiết bị về 'Active' nếu không còn sự cố tồn đọng khác.</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-close-modal>Hủy</button>
+                    <button type="submit" class="btn btn-primary" id="btnSubmitUpdateMaint">Lưu tiến độ</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Xác nhận xóa thiết bị -->
+    <div id="deleteConfirmModal" class="modal-backdrop">
+        <div class="modal-dialog modal-dialog-sm">
+            <div class="modal-header">
+                <h3 class="text-danger">Xác Nhận Xóa Thiết Bị</h3>
+                <button class="modal-close" data-close-modal>&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Bạn có chắc chắn muốn xóa thiết bị <strong id="deleteDeviceCodeText"></strong> khỏi hệ thống?</p>
+                <div class="alert-box alert-warning">
+                    🛡️ <strong>Chính sách bảo toàn lịch sử:</strong> Nếu thiết bị này đã từng có phiếu bảo trì liên kết, hệ thống sẽ <strong>từ chối xóa</strong> để bảo toàn hồ sơ kỹ thuật.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-close-modal>Hủy</button>
+                <button type="button" class="btn btn-danger" id="btnConfirmDelete">Đồng ý xóa</button>
+            </div>
         </div>
     </div>
 
     <!-- Toast Notification Container -->
-    <div id="toast-container" class="toast-container"></div>
+    <div id="toastContainer" class="toast-container"></div>
 
-    <script src="app.js"></script>
+    <!-- Footer -->
+    <footer class="app-footer">
+        <p>Đồ án cuối kỳ môn Linux & Phần Mềm Mã Nguồn Mở • Ubuntu Linux 24.04 LTS • G++ 13 • MariaDB Connector/C • cpp-httplib</p>
+    </footer>
+
+    <script src="/app.js"></script>
 </body>
 </html>
