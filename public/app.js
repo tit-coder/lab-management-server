@@ -154,7 +154,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const res = await fetch("/api/health");
             const data = await res.json();
 
-            if (res.ok && data.database === "connected") {
+            if (res.ok && data.database === true) {
                 systemHealth.className = "status-pill status-online";
                 healthText.textContent = "Hệ thống & MariaDB: Trực tuyến";
                 dbAlert.classList.add("hidden");
@@ -179,10 +179,10 @@ document.addEventListener("DOMContentLoaded", () => {
             const json = await res.json();
             if (res.ok && json.success) {
                 const d = json.data;
-                statTotal.textContent = d.total ?? 0;
-                statActive.textContent = d.active ?? 0;
-                statBroken.textContent = d.broken ?? 0;
-                statRepairing.textContent = d.repairing ?? 0;
+               statTotal.textContent = d.total_devices ?? 0;
+               statActive.textContent = d.active_devices ?? 0;
+               statBroken.textContent = d.broken_devices ?? 0;
+               statRepairing.textContent = d.repairing_devices ?? 0;
             }
         } catch (err) {
             console.error("Lỗi tải thống kê:", err);
