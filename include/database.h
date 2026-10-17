@@ -84,16 +84,18 @@ public:
     std::vector<MaintenanceLog> get_maintenance_logs(const std::string& status = "");
     int create_maintenance_log(const MaintenanceLog& log, std::string& error_message);
     bool update_maintenance_log(int id, const std::string& status, std::string& error_message);
-
+;
+    public:
     // Dashboard analytics
     SystemStats get_stats();
 
-private:
+    static std::string escape_json(const std::string& input);
+
+    private:
     MYSQL* conn_ = nullptr;
     std::mutex db_mutex_;
 
     void log_error(const std::string& context);
-    static std::string escape_json(const std::string& input);
 };
 
 } // namespace lab

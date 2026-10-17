@@ -16,7 +16,7 @@ LDFLAGS  += $(MARIADB_LIBS) -lpthread
 
 SRC_DIR   := src
 INC_DIR   := include
-BUILD_DIR := build
+BUILD_DIR := build-obj
 BIN_DIR   := bin
 TARGET    := $(BIN_DIR)/server
 
@@ -27,8 +27,9 @@ OBJS      := $(patsubst $(SRC_DIR)/%.cpp,$(BUILD_DIR)/%.o,$(SRCS))
 .PHONY: all
 all: $(TARGET)
 
-.PHONY: build
-build: all
+.PHONY: build compile
+build: compile
+compile: all
 
 # Link the executable
 $(TARGET): $(OBJS) | $(BIN_DIR)
