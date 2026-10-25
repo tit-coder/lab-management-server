@@ -7,11 +7,17 @@
 #include <iostream>
 #include <csignal>
 #include <memory>
+#include <climits>
+#include <string>
+#include <vector>
+#include <unistd.h>
 
 static std::unique_ptr<httplib::Server> g_server;
 
-void signalHandler(int signum) {
-    std::cout << "\n[INFO] Nhan tin hieu dung (" << signum << "). Dang tat server...\n";
+void signalHandler(int) {
+    static const char msg[] = "\n[INFO] Nhan tin hieu dung. Dang tat server...\n";
+    ssize_t ignored = write(STDOUT_FILENO, msg, sizeof(msg) - 1);
+     (void)ignored;
     if (g_server) {
         g_server->stop();
     }
@@ -110,7 +116,7 @@ int main() {
             } else {
                 setJsonResponse(res, 200, resp);
             }
-        } catch (const std::exception& ex) {
+        } catch (const std::exception& ) {
             setJsonResponse(res, 500, {
                 {"success", false},
                 {"status", "error"},
@@ -383,8 +389,9 @@ int main() {
     g_server->Get("/api/maintenance", [&maintenanceService](const httplib::Request& req, httplib::Response& res) {
         try {
             int deviceId = 0;
-            if (req.has_param("device_id")) {
-                try { deviceId = std::stoi(req.get_param_value("device_id")); } catch (...) {}
+            if (req.has_param("device_id") && !parseId(req.get_param_value("device_id"), deviceId)) {
+    setError(res, 400, "Tham so 'device_id' khong hop le");
+     return;
             }
             std::string status = req.has_param("status") ? req.get_param_value("status") : "";
 
@@ -454,7 +461,12 @@ int main() {
                 return;
             }
 
-            int deviceId = body["device_id"].get<int>();
+            long long rawDeviceId = body["device_id"].get<long long>();
+ if (rawDeviceId <= 0 || rawDeviceId > INT_MAX) {
+          setError(res, 400, "Truong 'device_id' phai la so nguyen duong hop le");
+     return;
+ }
+ int deviceId = static_cast<int>(rawDeviceId);
             std::string status = "Pending";
             if (body.contains("status") && body["status"].is_string()) {
                 status = body["status"].get<std::string>();
