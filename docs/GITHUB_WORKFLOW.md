@@ -54,8 +54,8 @@ gitGraph
 
 ### Bước 1: Clone Repository về máy Ubuntu
 ```bash
-git clone https://github.com/tit-coder/lab-management-server.git
-cd lab-management-server
+git clone https://github.com/tit-coder/lab-device-server.git
+cd lab-device-server
 ```
 
 ### Bước 2: Chuyển sang nhánh Feature được phân công
@@ -98,7 +98,7 @@ git push origin feature/frontend
 ## 4. Quy trình Tạo và Phê duyệt Pull Request (PR)
 
 1. **Tạo PR trên giao diện GitHub:**
-   - Truy cập: `https://github.com/tit-coder/lab-management-server/pulls`
+   - Truy cập: `https://github.com/tit-coder/lab-device-server/pulls`
    - Bấm **New pull request**.
    - Chọn Base: `main` ⬅ Compare: `feature/<tên-nhánh>`.
    - Điền đầy đủ thông tin theo mẫu `.github/pull_request_template.md`.
